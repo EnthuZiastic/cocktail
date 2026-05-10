@@ -31,11 +31,14 @@ defmodule Cocktail.Util do
   # For example after daylight saving 10h MUST still 10h the next day.
   # This behaviour could only happen on datetime with timezone (that include `std_offset`)
 
-  # Timex.shift/2 returns AmbiguousDateTime when the result lands in the DST fall-back window
-  # (e.g. America/New_York 1:00 AM on the first Sunday of November exists twice — once in EDT,
-  # once in EST). Resolve to :after (post-transition period) per Timex recommendation, then
-  # apply the normal DST wall-clock correction.
-  defp shift_dst(%Timex.AmbiguousDateTime{after: resolved}, datetime) do
+  # Timex.shift/2 (with :months or :weeks) uses calendar arithmetic and returns
+  # AmbiguousDateTime when the result lands in the DST fall-back window (e.g. 1:00 AM
+  # on fall-back night exists in both EDT and EST). Pick the side whose std_offset matches
+  # the original datetime so the wall-clock correction below computes to zero, preserving
+  # the wall-clock hour unchanged.
+  defp shift_dst(%Timex.AmbiguousDateTime{before: before_dt, after: after_dt}, datetime) do
+    std_offset = Map.get(datetime, :std_offset, 0)
+    resolved = if before_dt.std_offset == std_offset, do: before_dt, else: after_dt
     shift_dst(resolved, datetime)
   end
 

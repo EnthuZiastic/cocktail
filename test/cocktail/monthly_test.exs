@@ -343,4 +343,24 @@ defmodule Cocktail.MonthlyTest do
              ~Y[2021-04-01 06:00:00 America/Vancouver]
            ]
   end
+
+  test "preserves wall-clock hour when monthly occurrence lands in DST fall-back ambiguous window" do
+    # America/New_York falls back on Nov 5, 2023 at 2:00 AM EDT → 1:00 AM EST.
+    # 01:30 AM exists in both EDT and EST. Monthly shift from October uses calendar
+    # arithmetic and returns AmbiguousDateTime for Nov 5 01:30.
+    schedule =
+      ~Y[2023-10-05 01:30:00 America/New_York]
+      |> Schedule.new()
+      |> Schedule.add_recurrence_rule(:monthly)
+
+    [oct, nov, dec] = schedule |> Schedule.occurrences() |> Enum.take(3)
+
+    assert oct == ~Y[2023-10-05 01:30:00 America/New_York]
+
+    # Nov 5 01:30 is ambiguous; must resolve to the EDT side (std_offset 3600)
+    # so the wall-clock correction in shift_dst computes to zero.
+    assert %DateTime{hour: 1, minute: 30, std_offset: 3600} = nov
+
+    assert %DateTime{hour: 1, minute: 30} = dec
+  end
 end
